@@ -1,2 +1,2 @@
-# Reverse_logistics_mobile
-Smart Contracts to enable reverse logistics for mobile phones
+# Electronic chips supplychain
+Smart Contracts to tracking of chips to prevent counterfeit. 
