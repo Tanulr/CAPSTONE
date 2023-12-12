@@ -333,25 +333,14 @@ func (s *SmartContract) VerifyProduct(ctx contractapi.TransactionContextInterfac
 	originalValue := assetJSON.VerifyValue
 	// Compare values with the original manufacturer values
 	if originalValue == aValue && aValue == bValue {
-		// s.ProductVerifications[s.Receiver] = ProductVerification{originalValue, aValue, bValue, Verified}
-		// # If all values match, release funds to sender A and delivery entity D
-		
 		escrowJSON.TransactionCompleted = true
 	} else if aValue == originalValue && bValue != aValue {
 		// D is malicious, delivery stake to A, return escrow to B, and flag D
 		escrowJSON.DisputeFlag = true
-		// # s.ProductVerifications[s.Receiver] = ProductVerification{originalValue, aValue, bValue, Dispute}
-		// ctx.GetStub().Transfer(s.Sender, s.DeliveryStake)
-		// ctx.GetStub().Transfer(s.Receiver, s.EscrowAmount)
-		// Flag D (potentially ban D from the network)
 		escrowJSON.TransactionCompleted = false
 	} else {
 		// A is malicious, refund delivery stake to D, return escrow to B, and flag A
 		escrowJSON.DisputeFlag = true
-		// # s.ProductVerifications[s.Receiver] = ProductVerification{originalValue, aValue, bValue, Dispute}
-		// ctx.GetStub().Transfer(s.DeliveryEntity, s.DeliveryStake)
-		// ctx.GetStub().Transfer(s.Receiver, s.EscrowAmount)
-		// Flag A (potentially ban A from the network)
 		escrowJSON.TransactionCompleted = false
 	}
 	assetJSON.Owner, _ = ctx.GetClientIdentity().GetMSPID() // new owner is receiver
@@ -365,5 +354,5 @@ func (s *SmartContract) VerifyProduct(ctx contractapi.TransactionContextInterfac
 	if err != nil {
 		return err
 	}
-	return nil
+	return fmt.Errorf("Product verified and is authentic. Owner is now %s", x)
 }
