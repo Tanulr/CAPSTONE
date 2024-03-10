@@ -1,4 +1,8 @@
-package main
+/*
+SPDX-License-Identifier: Apache-2.0
+*/
+
+package chaincode
 
 import (
 	"encoding/json"
@@ -18,8 +22,8 @@ type Asset struct {
 	ChipID         string `json:"id"` // UNIQUE asset#
 	ChipName       string `json:"chipName"`
 	Owner          string `json:"owner"`
-	Quantity       uint64    `json:"quantity"`
-	VerifyValue 		   string    `json:"value"`
+	Quantity       uint64 `json:"quantity"`
+	VerifyValue    string `json:"value"`
 }
 
 type Check struct {
@@ -34,7 +38,6 @@ type EscrowContract struct { // initiated by A (sender)
 	DeliveryStake     uint64 `json:"deliveryStake"`
 	DisputeFlag       bool	`json:"disputeFlag"`
 	EscrowAmount      uint64 `json:"escrowAmount"`
-	// # ProductVerifications map[string]ProductVerification `json:"productVerifications"`
 	InitiateDelivery  bool	`json: "initiateDelivery"`
 	Receiver          string `json:"receiver"`
 	Sender            string `json:"sender"` 
@@ -50,13 +53,14 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 	// asset {ChipID(primary key), "asset1", ChipName: "Intel Core i9 10900K", Owner: "Tomoko", Quantity: 5, Value: 300},
 
 	//assets := []Asset{}
-	manufacturer := Check{ID: 1, Pack: ctx.GetClientIdentity().GetMSPID()}
+	x, _ := ctx.GetClientIdentity().GetMSPID()
+	manufacturer := Check{ID: "1", Pack: x}
 	
 	manufacturerJSON, err := json.Marshal(manufacturer)
 	if err != nil {
 		return err
 	}
-
+	
 	err = ctx.GetStub().PutState(manufacturer.ID, manufacturerJSON)
 	if err != nil {
 		return fmt.Errorf("failed to put to world state. %v", err)
@@ -67,14 +71,17 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 
 // return txn callers identity [query]
 func (s *SmartContract) getIdentity(ctx contractapi.TransactionContextInterface) (string, error) {
-	id, err = ctx.GetClientIdentity().GetMSPID()
+	id, err := ctx.GetClientIdentity().GetMSPID()
 	return id, err
 }
 
 // CreateAsset issues a new asset to the world state with given details. [invoke]
-func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, ID string, Name string, Qty int, Val string) error {
-	manufacturer := ctx.GetClientIdentity().GetMSPID()
-	if manufacturer != ctx.GetStub().GetState("1"){
+func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, ID string, Name string, Qty uint64, Val string) error {
+	manufacturer, _ := ctx.GetClientIdentity().GetMSPID()
+	xy, _ := ctx.GetStub().GetState("1")
+	var x Check
+	err := json.Unmarshal(xy, &x)
+	if manufacturer != x.Pack{
 		return fmt.Errorf("this entity is not a manufacturer and cannot create assets")
 	}
 
@@ -91,14 +98,14 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 		ChipName:   Name,
 		Owner: 		manufacturer,
 		Quantity:   Qty,
-		Value: 		Val
+		VerifyValue: 		Val,
 	}
 	assetJSON, err := json.Marshal(asset)
 	if err != nil {
 		return err
 	}
 
-	err = ctx.GetStub().PutState(ChipID, assetJSON)
+	err = ctx.GetStub().PutState(ID, assetJSON)
 	if err != nil {
 		return fmt.Errorf("failed to put to world state. %v", err)
 	}
@@ -109,6 +116,7 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 // ReadAsset returns the asset stored in the world state with given id. [query]
 func (s *SmartContract) ReadAsset(ctx contractapi.TransactionContextInterface, id string) (*Asset, error) {
 	assetJSON, err := ctx.GetStub().GetState(id)
+	
 	if err != nil {
 		return nil, fmt.Errorf("failed to read from world state: %v", err)
 	}
@@ -125,45 +133,7 @@ func (s *SmartContract) ReadAsset(ctx contractapi.TransactionContextInterface, i
 	return &asset, nil
 }
 
-// // UpdateAsset updates an existing asset in the world state with provided parameters.
-// func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface, id string, color string, size int, owner string, appraisedValue int) error {
-// 	exists, err := s.AssetExists(ctx, id)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if !exists {
-// 		return fmt.Errorf("the asset %s does not exist", id)
-// 	}
 
-// 	// overwriting original asset with new asset
-// 	asset := Asset{
-	// correct naming
-// 		ID:             id,
-// 		Color:          color,
-// 		Size:           size,
-// 		Owner:          owner,
-// 		AppraisedValue: appraisedValue,
-// 	}
-// 	assetJSON, err := json.Marshal(asset)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	return ctx.GetStub().PutState(id, assetJSON)
-// }
-
-// // DeleteAsset deletes an given asset from the world state.
-// func (s *SmartContract) DeleteAsset(ctx contractapi.TransactionContextInterface, id string) error {
-// 	exists, err := s.AssetExists(ctx, id)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if !exists {
-// 		return fmt.Errorf("the asset %s does not exist", id)
-// 	}
-
-// 	return ctx.GetStub().DelState(id)
-// }
 
 // AssetExists returns true when asset with given ID exists in world state
 func (s *SmartContract) AssetExists(ctx contractapi.TransactionContextInterface, id string) (bool, error) {
@@ -174,15 +144,7 @@ func (s *SmartContract) AssetExists(ctx contractapi.TransactionContextInterface,
 
 	return assetJSON != nil, nil
 }
-/*
-func (s *SmartContract) ManufacturerExists(ctx contractapi.TransactionContextInterface, id int) (bool, error) {
-	manufacturerJSON, err := ctx.GetStub().GetState(id)
-	if err != nil {
-		return false, fmt.Errorf("failed to read from world state: %v", err)
-	}
 
-	return manufacturerJSON != nil, nil
-}*/
 
 // GetAllAssets returns all assets found in world state
 func (s *SmartContract) GetAllAssets(ctx contractapi.TransactionContextInterface) ([]*Asset, error) {
@@ -213,34 +175,18 @@ func (s *SmartContract) GetAllAssets(ctx contractapi.TransactionContextInterface
 }
 
 // #################################################
-// # type ProductVerification struct {
-// 	AValue        uint64              `json:"aValue"`
-// 	BValue        uint64              `json:"bValue"`
-// 	OriginalValue uint64              `json:"originalValue"`
-// 	Status        VerificationStatus `json:"status"`
-// }
-/*
-type Verification struct {
-	Entity  	  string   `json:"Entity"` //getCreator() / getID()
-	Verification  string   `json:"Verify"`
-}
-type VerificationStatus int
 
-const (
-	Dispute
-	NotVerified VerificationStatus = iota
-	Verified
-)*/
 
-// Client drafts order. Checks if order is valid.
+// Client drafts order. Checks if order is valid. [invoke]
 func (s *SmartContract) Init(ctx contractapi.TransactionContextInterface, txn, assetID, deliveryEntity, receiver, verify string, escrowAmount, deliveryStake uint64) error {
 	// Check if asset exists
 	asset, err := s.ReadAsset(ctx, assetID)
 	if err != nil {
-		return "", err
+		return err
 	}
 	// Check is client owns asset
-	if asset.Owner != ctx.GetClientIdentity().GetMSPID() {
+	x, err := ctx.GetClientIdentity().GetMSPID()
+	if asset.Owner !=  x {
 		return fmt.Errorf("Client doesnt own asset %v", err)
 	}
 	// # Check is delivery, receiver exist in same channel
@@ -254,24 +200,20 @@ func (s *SmartContract) Init(ctx contractapi.TransactionContextInterface, txn, a
 		DeliveryStake: deliveryStake,
 		DisputeFlag: false,
 		EscrowAmount: escrowAmount,
-		// # ProductVerifications map[string]ProductVerification `json:"productVerifications"`
 		InitiateDelivery: false,
 		Receiver: receiver,
-		Sender: ctx.GetClientIdentity().GetMSPID(),
+		Sender: x,
 		StartDelivery: false,
 		TransactionCompleted: false,
 		TxnID: txn, //Txn1	
 		Verify: verify,
 	}
-	// RECHECK
-	flag := Flag {
 
-	}
 	escrowJSON, err := json.Marshal(escrow)
 	if err != nil {
 		return err
 	}
-	err := ctx.GetStub().PutState(txn, escrowJSON)
+	err = ctx.GetStub().PutState(txn, escrowJSON)
 	if err != nil {
 		return err
 	}
@@ -279,22 +221,26 @@ func (s *SmartContract) Init(ctx contractapi.TransactionContextInterface, txn, a
 	return err 
 }
 
-// delivery PROCESS started by receiver
+// delivery PROCESS started by receiver. [invoke]
 func (s *SmartContract) StartDelivery(ctx contractapi.TransactionContextInterface, txn string, decision bool) error {
 	// how to access stuct data using object. or else we'll just add txnID, access getState()
-	escrowJSON, err := ctx.GetStub().GetState(txn)
+	escrow, err := ctx.GetStub().GetState(txn)
+	var escrowJSON EscrowContract
+	err = json.Unmarshal(escrow, &escrowJSON)
+	
 	if err != nil {
 		return fmt.Errorf("failed to read from world state: %v", err)
 	}
-
-	if ctx.GetClientIdentity().GetMSPID() != escrowJson[receiver] {
+	x, err := ctx.GetClientIdentity().GetMSPID()
+	if x != escrowJSON.Receiver {
 		return fmt.Errorf("Only receiver (B) can start the delivery")
 	}
 	if escrowJSON.TransactionCompleted {
 		return fmt.Errorf("Transaction is already completed")
 	}
-	escrowJSON[startDelivery] = decision
-	err := ctx.GetStub().PutState(txn, escrowJSON)
+	escrowJSON.StartDelivery = decision
+	escrow, err = json.Marshal(escrowJSON)
+	err = ctx.GetStub().PutState(txn, escrow)
 	if err != nil {
 		return err
 	}
@@ -302,21 +248,26 @@ func (s *SmartContract) StartDelivery(ctx contractapi.TransactionContextInterfac
 	return nil 
 }
 
-// ran by sender, to say they gave product to delivery
+// ran by sender, to say they gave product to delivery. [invoke]
 func (s *SmartContract) InitiateDelivery(ctx contractapi.TransactionContextInterface, txn string, decision bool) error {
-	escrowJSON, err := ctx.GetStub().GetState(txn)
+
+	escrow, err := ctx.GetStub().GetState(txn)
+	var escrowJSON EscrowContract
+	err = json.Unmarshal(escrow, &escrowJSON)
+	
 	if err != nil {
 		return fmt.Errorf("failed to read from world state: %v", err)
 	}
-
-	if ctx.GetClientIdentity().GetMSPID() != escrowJson[sender] {
+	x, err := ctx.GetClientIdentity().GetMSPID()
+	if x != escrowJSON.Sender {
 		return fmt.Errorf("Only sender (A) can start the delivery")
 	}
 	if escrowJSON.TransactionCompleted {
 		return fmt.Errorf("Transaction is already completed")
 	}
-	escrowJSON[initiateDelivery] = decision
-	err := ctx.GetStub().PutState(txn, escrowJSON)
+	escrowJSON.InitiateDelivery = decision
+	escrow, err = json.Marshal(escrowJSON)
+	err = ctx.GetStub().PutState(txn, escrow)
 	if err != nil {
 		return err
 	}
@@ -324,21 +275,25 @@ func (s *SmartContract) InitiateDelivery(ctx contractapi.TransactionContextInter
 	return nil 
 }
 
-// ran by delivery to say they finished their job of delivery
+// ran by delivery to say they finished their job of delivery. [invoke]
 func (s *SmartContract) ConfirmDelivery(ctx contractapi.TransactionContextInterface, txn string, decision bool) error {
-	escrowJSON, err := ctx.GetStub().GetState(txn)
+
+	escrow, err := ctx.GetStub().GetState(txn)
+	var escrowJSON EscrowContract
+	err = json.Unmarshal(escrow, &escrowJSON)
 	if err != nil {
 		return fmt.Errorf("failed to read from world state: %v", err)
 	}
-
-	if ctx.GetClientIdentity().GetMSPID() != escrowJson[delivery] {
+	x, _ := ctx.GetClientIdentity().GetMSPID() 
+	if x != escrowJSON.Delivery {
 		return fmt.Errorf("Only delivery entity (D) can start the delivery")
 	}
-	if escrowJSON[transactionCompleted] {
+	if escrowJSON.TransactionCompleted {
 		return fmt.Errorf("Transaction is already completed")
 	}
-	escrowJSON[confirmDelivery] = decision
-	err := ctx.GetStub().PutState(txn, escrowJSON)
+	escrowJSON.ConfirmDelivery = decision
+	escrow, err = json.Marshal(escrowJSON)
+	err = ctx.GetStub().PutState(txn, escrow)
 	if err != nil {
 		return err
 	}
@@ -346,69 +301,58 @@ func (s *SmartContract) ConfirmDelivery(ctx contractapi.TransactionContextInterf
 	return nil
 }
 
-// receiver runs this to verify with manufacture verify (in asset) and sender (in escrowContract)
+// receiver runs this to verify with manufacture verify (in asset) and sender (in escrowContract) [invoke]
 func (s *SmartContract) VerifyProduct(ctx contractapi.TransactionContextInterface, txn string, bValue string) error {
-	escrowJSON, err := ctx.GetStub().GetState(txn)
+	escrow, err := ctx.GetStub().GetState(txn)
+	var escrowJSON EscrowContract
+	err = json.Unmarshal(escrow, &escrowJSON)
+	
 	if err != nil {
 		return fmt.Errorf("failed to read from world state: %v", err)
 	}
-	assetJSON, err := ctx.GetStub().GetState(escrowJSON[assetID])
+
+	asset, err := ctx.GetStub().GetState(escrowJSON.AssetID)
+	var assetJSON Asset
+	err = json.Unmarshal(asset, &assetJSON)
+	
 	if err != nil {
 		return fmt.Errorf("failed to read from world state: %v", err)
 	}
-	if ctx.GetClientIdentity().GetMSPID() != escrowJson[receiver] {
+	x, _ := ctx.GetClientIdentity().GetMSPID()
+	if x != escrowJSON.Receiver {
 		return fmt.Errorf("Only receiver (B) can start the delivery")
 	}
-	if escrowJSON[transactionCompleted] {
+	if escrowJSON.TransactionCompleted {
 		return fmt.Errorf("Transaction is already completed")
 	}	
-	if escrowJSON[disputeFlag] {
+	if escrowJSON.DisputeFlag {
 		return fmt.Errorf("Dispute is ongoing")
 	}
 
-	aValue := escrowJSON[verify]
-	originalValue := assetJSON[value]
+	aValue := escrowJSON.Verify
+	originalValue := assetJSON.VerifyValue
 	// Compare values with the original manufacturer values
 	if originalValue == aValue && aValue == bValue {
-		// s.ProductVerifications[s.Receiver] = ProductVerification{originalValue, aValue, bValue, Verified}
-		// # If all values match, release funds to sender A and delivery entity D
-		
-		escrowJSON[transactionCompleted] = true
+		escrowJSON.TransactionCompleted = true
 	} else if aValue == originalValue && bValue != aValue {
 		// D is malicious, delivery stake to A, return escrow to B, and flag D
-		escrowJSON[disputeFlag] = true
-		// # s.ProductVerifications[s.Receiver] = ProductVerification{originalValue, aValue, bValue, Dispute}
-		// ctx.GetStub().Transfer(s.Sender, s.DeliveryStake)
-		// ctx.GetStub().Transfer(s.Receiver, s.EscrowAmount)
-		// Flag D (potentially ban D from the network)
-		escrowJSON[transactionCompleted] = false
+		escrowJSON.DisputeFlag = true
+		escrowJSON.TransactionCompleted = false
 	} else {
 		// A is malicious, refund delivery stake to D, return escrow to B, and flag A
-		escrowJSON[disputeFlag] = true
-		// # s.ProductVerifications[s.Receiver] = ProductVerification{originalValue, aValue, bValue, Dispute}
-		// ctx.GetStub().Transfer(s.DeliveryEntity, s.DeliveryStake)
-		// ctx.GetStub().Transfer(s.Receiver, s.EscrowAmount)
-		// Flag A (potentially ban A from the network)
-		escrowJSON[transactionCompleted] = false
+		escrowJSON.DisputeFlag = true
+		escrowJSON.TransactionCompleted = false
 	}
-	assetJSON[owner] := ctx.GetClientIdentity().GetMSPID() // new owner is receiver
-	err := ctx.GetStub().PutState(txn, escrowJSON)
+	assetJSON.Owner, _ = ctx.GetClientIdentity().GetMSPID() // new owner is receiver
+	escrow, err = json.Marshal(escrowJSON)
+	err = ctx.GetStub().PutState(txn, escrow)
 	if err != nil {
 		return err
 	}
-	err := ctx.GetStub().PutState(txn, assetJSON)
+	asset, err = json.Marshal(assetJSON)
+	err = ctx.GetStub().PutState(txn, asset)
 	if err != nil {
 		return err
 	}
-	return nil
+	return fmt.Errorf("Product verified and is authentic. Owner is now %s", x)
 }
-
-// func (s *SmartContract) GetContractBalance(ctx contractapi.TransactionContextInterface) (uint64, error) {
-// 	return ctx.GetStub().GetState(s.ContractID)
-// }
-
-// func main() {
-// 	contract := new(EscrowContract)
-// 	contract.TransactionContextHandler = &contractapi.ExampleCC{}
-// 	contractapi.NewChaincode(contract)
-// }
